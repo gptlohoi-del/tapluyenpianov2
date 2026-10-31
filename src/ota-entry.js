@@ -29,7 +29,13 @@ async function check(explicit=false){
   const actual=Array.from(new Uint8Array(digest)).map(x=>x.toString(16).padStart(2,'0')).join('');
   if(actual.toLowerCase()!==manifest.sha256.toLowerCase())throw new Error('SHA256 không khớp. Hủy cập nhật.');
   toast('Đang tải nội dung OTA...');
-  const bundle=await CapacitorUpdater.download({version:manifest.version,url:manifest.url});
+  // Capgo Updater 8.54.0 requires SHA-256 checksum for manual ZIP downloads.
+  // The manifest value was already verified above against the downloaded bytes.
+  const bundle=await CapacitorUpdater.download({
+    version:manifest.version,
+    url:manifest.url,
+    checksum:manifest.sha256
+  });
   await CapacitorUpdater.next({id:bundle.id});
   toast('Đã tải nội dung mới. Mở lại ứng dụng sau khi đóng để thử bản mới.');
   return 'Đã tải nội dung mới; sẽ kích hoạt khi ứng dụng khởi động lại theo cơ chế của trình cập nhật.';
