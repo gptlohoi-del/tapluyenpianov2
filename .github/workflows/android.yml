@@ -41,6 +41,7 @@ jobs:
         run: |
           npx cap add android
           npx cap sync android
+          sed -i 's/android:name="\.MainActivity"/android:name=".MainActivity" android:screenOrientation="landscape"/' android/app/src/main/AndroidManifest.xml
       - name: Set monotonically increasing native versionCode
         shell: bash
         run: |
