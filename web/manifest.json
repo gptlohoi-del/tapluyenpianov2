@@ -1,6 +1,6 @@
 {
-  "name": "Luyện Piano V2",
-  "short_name": "Piano V2",
+  "name": "Piano",
+  "short_name": "Piano",
   "start_url": "index.html",
   "display": "standalone",
   "orientation": "landscape",

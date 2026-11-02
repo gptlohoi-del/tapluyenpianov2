@@ -1,6 +1,6 @@
 {
   "appId": "vn.tapluyenpiano.v2",
-  "appName": "Luyện Piano V2",
+  "appName": "Piano",
   "webDir": "web",
   "server": { "androidScheme": "https" },
   "plugins": {
