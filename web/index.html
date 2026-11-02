@@ -639,15 +639,11 @@
 
       <!-- Khung lời hát nằm bên phải nốt rơi; tất cả thay đổi được xem ngay trên sân khấu. -->
       <div class="setting-row">
-        <div class="setting-row-inline">
-          <label for="fallingLyricFontRange">🔤 Cỡ chữ lời hát cạnh nốt rơi:</label>
-          <div class="slider-line"><input type="range" id="fallingLyricFontRange" min="1" max="28" step="1" value="14" /><output id="fallingLyricFontDisplay">14 px</output></div>
-        </div>
         <div class="setting-row-inline" style="margin-top:8px;">
           <label for="fallingLyricRadiusRange">▢ Bo góc khung lời hát cạnh nốt rơi:</label>
           <div class="slider-line"><input type="range" id="fallingLyricRadiusRange" min="0" max="20" step="1" value="4" /><output id="fallingLyricRadiusDisplay">4 px</output></div>
         </div>
-        <p class="settings-hint">Khung lời hát tự giãn chiều ngang vừa đủ chữ, chiều cao theo nốt rơi; khi thiếu chỗ sẽ tự giảm cỡ chữ hoặc ẩn để không che nốt khác. Với hợp âm, khung nằm bên phải nốt cao nhất.</p>
+        <p class="settings-hint">Lời hát luôn trên một dòng, khung tự giãn ngang theo chữ và giữ chiều cao theo nốt rơi. Khi không đủ chỗ mà vẫn tránh được nốt khác, nhãn có thể tạm ẩn. Hợp âm gắn lời vào nốt cao nhất.</p>
       </div>
       <!-- Cài đặt độ trong suốt của khung lời hát bên nốt rơi -->
       <div class="setting-row">
@@ -741,9 +737,7 @@
     const savedFallingRadiusPx = Number(localStorage.getItem('piano_fallingNoteRadiusPx') ?? '5');
     let fallingNoteRadiusPx = Math.min(20, Math.max(0, Number.isFinite(savedFallingRadiusPx) ? savedFallingRadiusPx : 5));
     let toolbarHeightPx = Number(localStorage.getItem('piano_toolbarHeightPx') || 82);
-    const LYRIC_DEFAULT_FONT_PX = 14;
-    const savedLyricFontPx = Number(localStorage.getItem('piano_fallingLyricFontPx') ?? LYRIC_DEFAULT_FONT_PX);
-    let fallingLyricFontPx = Math.max(1, Math.min(28, Number.isFinite(savedLyricFontPx) ? savedLyricFontPx : LYRIC_DEFAULT_FONT_PX));
+    const LYRIC_FONT_PX = 13; // Cố định để lời hát không bao giờ bị thu thành chữ li ti.
     const savedLyricRadiusPx = Number(localStorage.getItem('piano_fallingLyricRadiusPx') ?? '4');
     let fallingLyricRadiusPx = Math.max(0, Math.min(20, Number.isFinite(savedLyricRadiusPx) ? savedLyricRadiusPx : 4));
 
@@ -2691,14 +2685,24 @@
     }
 
     /********************************************************************
-     * Khung lyric bên phải nốt rơi: chiều cao theo nốt, chiều rộng tự
-     * giãn vừa một dòng chữ. Luôn kiểm tra va chạm với các nốt rơi đang
-     * thấy và các khung lyric đã vẽ; không bao giờ che nốt khác.
+     * Nhãn lời hát cạnh nốt rơi:
+     * - Chỉ 1 dòng, cỡ chữ cố định (không co chữ / không tự xuống dòng).
+     * - Chiều rộng = chiều rộng thực của văn bản + viền đệm.
+     * - Khung có chiều cao theo nốt; đặt bên phải nốt cao nhất của hợp âm.
+     * - Tìm khoảng trống theo chiều ngang, không phủ bất kỳ nốt rơi nào.
      ********************************************************************/
+    function measureOneLineLyric(text) {
+      const value = String(text ?? '').trim().replace(/\s+/g, ' ');
+      if (!value) return null;
+      ctx.font = `700 ${LYRIC_FONT_PX}px Lexend, sans-serif`;
+      return {text: value, width: Math.ceil(ctx.measureText(value).width) + 10};
+    }
+
     function rightSideLyricX(anchorRight, y, w, h, noteRects, placedLyricRects, viewportW) {
       let x = anchorRight + 3;
       const blocked = [...noteRects, ...placedLyricRects];
-      // Dịch ngang đến khe trống đầu tiên; không vượt mép phải canvas.
+      // Tịnh tiến tới cuối vật cản gần nhất. Chỉ xét các vật cản giao cắt theo chiều dọc.
+      // Không tự chuyển sang bên trái: nhãn luôn nằm bên phải nốt gốc.
       for (let i = 0; i <= blocked.length; i++) {
         const obstacle = blocked.find(rect =>
           x < rect.x + rect.w + 2 && x + w > rect.x - 2 &&
@@ -2706,29 +2710,8 @@
         if (!obstacle) break;
         x = Math.max(x, obstacle.x + obstacle.w + 3);
       }
+      // Tránh clip chữ / che nốt. Nếu màn hình quá chật, tạm ẩn riêng nhãn đó.
       return x + w <= viewportW - 2 ? x : null;
-    }
-
-    function layoutAutoWidthFallingLyric(item, noteRects, placedLyricRects, viewportW, preferredFontPx) {
-      const text = String(item.text || '').trim();
-      const boxHeight = item.h;
-      if (!text || boxHeight < 5 || item.anchorRight + 5 >= viewportW) return null;
-      const maxFont = Math.min(28, Math.max(1, preferredFontPx), boxHeight - 4);
-      const horizontalPadding = 5;
-      // Giữ một dòng chữ nếu có thể; font giảm dần chỉ khi thiếu khoảng trống.
-      for (let fontPx = maxFont; fontPx >= 1; fontPx -= 0.5) {
-        ctx.font = `700 ${fontPx}px Lexend, sans-serif`;
-        const textWidth = ctx.measureText(text).width;
-        const boxWidth = Math.max(item.w, Math.ceil(textWidth + horizontalPadding * 2));
-        if (boxWidth > viewportW - item.anchorRight - 5) continue;
-        const x = rightSideLyricX(item.anchorRight, item.y, boxWidth, boxHeight,
-          noteRects, placedLyricRects, viewportW);
-        if (x !== null) {
-          return {x, y: item.y, w: boxWidth, h: boxHeight, fontPx, text};
-        }
-      }
-      // Không còn chỗ: bỏ qua khung này, tuyệt đối không vẽ đè lên nốt khác.
-      return null;
     }
 
     /********************************************************************
@@ -2903,6 +2886,7 @@
           ctx.roundRect(bx, clippedTop, bw, clippedHeight,
             Math.min(3, bw / 2, clippedHeight / 2));
           ctx.fill(); ctx.stroke();
+          visibleNoteRects.push({x: bx, y: clippedTop, w: bw, h: clippedHeight});
           ctx.setLineDash([]);
           if (clippedHeight >= 12 && bw >= 12) {
             ctx.fillStyle = '#4E342E';
@@ -2999,26 +2983,29 @@
 
       const placedLyricRects = [];
       lyricsToDraw.forEach((item) => {
-        const box = layoutAutoWidthFallingLyric(item, visibleNoteRects,
-          placedLyricRects, width, fallingLyricFontPx);
-        if (!box) return;
-
+        const measured = measureOneLineLyric(item.text);
+        if (!measured) return;
+        const boxWidth = measured.width;
+        const boxHeight = item.h;  // Giữ nguyên chiều cao đã gắn với nốt.
+        if (boxHeight < LYRIC_FONT_PX + 4) return; // Không ép font nhỏ hơn để nhét vào nốt quá ngắn.
+        const boxY = item.y;
+        const boxX = rightSideLyricX(item.anchorRight, boxY, boxWidth, boxHeight,
+          visibleNoteRects, placedLyricRects, width);
+        if (boxX === null) return;
         ctx.fillStyle = `rgba(253, 249, 241, ${lyricBgOpacity})`;
         ctx.strokeStyle = `rgba(141, 78, 42, ${Math.min(1, lyricBgOpacity + 0.2)})`;
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.roundRect(box.x, box.y, box.w, box.h,
-          Math.min(fallingLyricRadiusPx, box.w / 2, box.h / 2));
+        ctx.roundRect(boxX, boxY, boxWidth, boxHeight,
+          Math.min(fallingLyricRadiusPx, boxWidth / 2, boxHeight / 2));
         ctx.fill();
         ctx.stroke();
-        placedLyricRects.push({x: box.x, y: box.y, w: box.w, h: box.h});
-
+        placedLyricRects.push({x: boxX, y: boxY, w: boxWidth, h: boxHeight});
         ctx.fillStyle = `rgba(62, 39, 35, ${lyricTextOpacity})`;
-        ctx.font = `700 ${box.fontPx}px Lexend, sans-serif`;
+        ctx.font = `700 ${LYRIC_FONT_PX}px Lexend, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(box.text, box.x + box.w / 2, box.y + box.h / 2,
-          Math.max(1, box.w - 10));
+        ctx.fillText(measured.text, boxX + boxWidth / 2, boxY + boxHeight / 2);
         ctx.textBaseline = 'alphabetic';
       });
 
@@ -3437,15 +3424,6 @@
       // drawSynthesiaStage đang chạy mỗi frame nên xem màu mới ngay, không cần đóng Setting.
     });
 
-    const lyricFontRange = document.getElementById('fallingLyricFontRange');
-    const lyricFontOutput = document.getElementById('fallingLyricFontDisplay');
-    lyricFontRange.value = String(fallingLyricFontPx);
-    lyricFontOutput.textContent = fallingLyricFontPx + ' px';
-    lyricFontRange.addEventListener('input', (e) => {
-      fallingLyricFontPx = Math.max(1, Math.min(28, Number(e.target.value)));
-      lyricFontOutput.textContent = fallingLyricFontPx + ' px';
-      localStorage.setItem('piano_fallingLyricFontPx', String(fallingLyricFontPx));
-    });
     const lyricRadiusRange = document.getElementById('fallingLyricRadiusRange');
     const lyricRadiusOutput = document.getElementById('fallingLyricRadiusDisplay');
     lyricRadiusRange.value = String(fallingLyricRadiusPx);
