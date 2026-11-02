@@ -5,6 +5,7 @@ on:
     paths:
       - 'web/**'
       - 'songs/**'
+      - 'android-assets/**'
       - 'scripts/**'
       - 'src/**'
       - 'tests/**'
@@ -42,6 +43,8 @@ jobs:
           npx cap add android
           npx cap sync android
           sed -i 's/android:name="\.MainActivity"/android:name=".MainActivity" android:screenOrientation="landscape"/' android/app/src/main/AndroidManifest.xml
+      - name: Apply original Piano app icons (launcher / adaptive)
+        run: cp -R android-assets/res/. android/app/src/main/res/
       - name: Set monotonically increasing native versionCode
         shell: bash
         run: |

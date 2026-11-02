@@ -360,6 +360,49 @@
     .phrase-chip small{display:block;line-height:1.35;}
     @media(max-width:700px){.piano-toolbar{padding:3px 4px;gap:2px}.toolbar-line button,.toolbar-line select{min-height:35px;padding:5px 8px}.modal-box,.phrases-modal-box{max-height:91dvh;width:98%;padding:12px}.now-line{font-size:11px}}
     @media(orientation:portrait){.stage-container{min-height:180px;}.toolbar-actions{flex-wrap:wrap;overflow:visible}.now-line{white-space:normal}.piano-toolbar{flex-shrink:0}}
+    /* Giữ trọn không gian tập: chiều cao tính bằng pixel, thanh thu gọn được. */
+    .piano-toolbar{
+      --toolbar-height:82px;
+      height:var(--toolbar-height);padding:3px 5px;gap:2px;
+      overflow:hidden;transition:height .12s ease, padding .12s ease;
+    }
+    .piano-toolbar .toolbar-line{flex:1 1 0;min-height:0;gap:4px;}
+    .piano-toolbar .toolbar-line button,.piano-toolbar .toolbar-line select{
+      min-height:22px;height:100%;padding:1px 7px;font-size:clamp(10px,1.2vw,13px);
+    }
+    .piano-toolbar .toolbar-line .song-select{min-width:55px;}
+    .piano-toolbar .now-line{flex:0 0 15px;min-height:0;font-size:11px;}
+    .piano-toolbar.toolbar-collapsed{height:0!important;padding-top:0;padding-bottom:0;border:0;}
+    .toolbar-float{
+      position:absolute;z-index:45;right:8px;top:calc(var(--sheet-banner-height,95px) + 6px);
+      width:32px;height:32px;min-height:32px;border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      box-shadow:0 2px 8px #0006;background:#f5e6cf;color:#443124;
+      border:1px solid #9b8063;font-size:18px;opacity:.93;
+    }
+    .modal-backdrop#settingsModal{
+      background:transparent;pointer-events:none;
+      justify-content:flex-end;align-items:center;padding:7px;
+    }
+    #settingsModal .modal-box{
+      pointer-events:auto;width:min(440px,43vw);height:calc(100dvh - 14px);
+      max-width:none;max-height:none;padding:12px 14px;border-width:2px;
+      box-shadow:-8px 0 25px #0004;
+    }
+    #settingsModal .setting-row{padding:9px 10px;margin-bottom:8px;}
+    #settingsModal input[type=range]{min-width:110px;width:100%;flex:1;accent-color:#8D4E2A;touch-action:pan-y;}
+    .slider-line{display:flex;align-items:center;gap:9px;width:100%;}
+    .slider-line output{font-weight:700;min-width:64px;text-align:right;font-variant-numeric:tabular-nums;}
+    .settings-hint{font-size:11px;color:var(--text-muted);line-height:1.4;}
+    #settingsModal .modal-header-sticky{top:-12px;}
+    @media(max-width:660px){
+      #settingsModal .modal-box{width:min(360px,60vw);padding:9px;}
+      #settingsModal label{white-space:normal;}
+      .piano-toolbar .toolbar-line button,.piano-toolbar .toolbar-line select{padding:1px 5px;}
+    }
+    @media(orientation:portrait){#settingsModal .modal-box{width:min(390px,92vw);}}
+    @media(max-height:430px){#settingsModal .modal-header-sticky{margin-bottom:5px;padding-bottom:4px}}
+
   </style>
 </head>
 <body>
@@ -401,6 +444,7 @@
 
   <!-- MÀN HÌNH KHUÔNG NHẠC CHẠY NGANG + NỐT RƠI (SYNTHESIA) & BÀN PHÍM -->
   <div class="stage-container" id="stageContainer">
+    <button id="btnToggleToolbar" class="toolbar-float" title="Ẩn thanh điều khiển" aria-label="Ẩn thanh điều khiển" aria-expanded="true">▴</button>
     <div id="countInOverlay">Chuẩn bị: 4</div>
     <canvas id="pianoCanvas"></canvas>
   </div>
@@ -451,10 +495,17 @@
   <div class="modal-backdrop" id="settingsModal">
     <div class="modal-box">
       <div class="modal-header-sticky">
-        <h2>⚙️ Cài đặt luyện tập</h2>
+        <h2>⚙️ Cài đặt <small style="font-size:11px;font-weight:400;display:block">Kéo để xem thay đổi ngay trên màn hình bên trái</small></h2>
         <button class="btn-secondary" id="btnCloseSettings">Đóng ✕</button>
       </div>
 
+      <div class="setting-row">
+        <label for="toolbarHeightRange">↕ Chiều cao thanh điều khiển</label>
+        <div class="slider-line"><input id="toolbarHeightRange" type="range" min="68" max="150" step="2"/><output id="toolbarHeightDisplay">82 px</output></div>
+        <label for="blackKeyLightRange">🎹 Độ nhạt phím thăng / giáng</label>
+        <div class="slider-line"><input id="blackKeyLightRange" type="range" min="20" max="90" step="5"/><output id="blackKeyLightDisplay">60%</output></div>
+        <div class="settings-hint">Kéo thanh trượt và quan sát trực tiếp phần bản nhạc không bị bảng cài đặt che.</div>
+      </div>
       <!-- Cài đặt: Hiển thị dòng Sheet nhạc & Khóa nhạc -->
       <div class="setting-row">
         <div class="setting-row-inline">
@@ -505,10 +556,10 @@
       <!-- Cài đặt: Độ cao ô nhạc (nốt rơi) -->
       <div class="setting-row">
         <div class="setting-row-inline">
-          <label for="noteHeightRange">📐 Độ cao ô nhạc (độ dài nốt rơi):</label>
+          <label for="noteHeightRange">📐 Chiều dài nốt rơi cho mỗi phách (px):</label>
           <div style="display:flex; align-items:center; gap:10px;">
-            <input type="range" id="noteHeightRange" min="0.5" max="3" step="0.05" value="1" style="cursor:pointer;" />
-            <span class="value-badge" id="noteHeightDisplay">100%</span>
+            <input type="range" id="noteHeightRange" min="12" max="130" step="1" value="46" />
+            <output class="value-badge" id="noteHeightDisplay">46 px</output>
           </div>
         </div>
       </div>
@@ -517,10 +568,11 @@
       <div class="setting-row">
         <div class="setting-row-inline">
           <label>⏱ Tốc độ bài hát (Tempo):</label>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <button class="btn-secondary" id="btnTempoDown">- 5</button>
-            <span class="value-badge" id="tempoDisplay">75 BPM</span>
-            <button class="btn-secondary" id="btnTempoUp">+ 5</button>
+          <div class="slider-line">
+            <input type="range" id="tempoRange" min="30" max="220" step="1" value="75" />
+            <output class="value-badge" id="tempoDisplay">75 BPM</output>
+            <button class="btn-secondary" id="btnTempoDown">−5</button>
+            <button class="btn-secondary" id="btnTempoUp">+5</button>
           </div>
         </div>
       </div>
@@ -528,8 +580,8 @@
       <div class="setting-row">
         <div class="setting-row-inline"><label for="keyboardModeSelect">🎹 Kích thước bàn phím</label>
           <select id="keyboardModeSelect"><option value="all">Toàn bộ âm vực</option><option value="follow">Phóng to nhóm nốt đang chơi</option></select></div>
-        <div class="setting-row-inline"><label for="keyboardHeightSelect">Chiều cao bàn phím</label>
-          <select id="keyboardHeightSelect"><option value="36">36 px</option><option value="48">48 px</option><option value="60">60 px</option></select></div>
+        <div class="setting-row-inline"><label for="keyboardHeightRange">Chiều cao bàn phím</label>
+          <div class="slider-line"><input type="range" id="keyboardHeightRange" min="28" max="100" step="2"/><output id="keyboardHeightDisplay">48 px</output></div></div>
       </div>
       <div class="setting-row">
         <div class="setting-row-inline"><label for="loopPauseSelect">⏱ Nghỉ giữa hai lần lặp</label>
@@ -598,12 +650,10 @@
       <!-- Cài đặt: Nhịp đếm chờ -->
       <div class="setting-row">
         <div class="setting-row-inline">
-          <label for="countInInput">⏳ Số nhịp đếm chờ (Count-in) trước khi lặp lại câu:</label>
+          <label for="countInRange">⏳ Số nhịp đếm chờ (Count-in):</label>
           <div style="display:flex; align-items:center; gap:8px;">
-            <button class="btn-secondary" id="btnCountInMinus">-</button>
-            <input type="number" id="countInInput" min="0" max="16" value="3" style="width: 75px; text-align:center;" />
-            <button class="btn-secondary" id="btnCountInPlus">+</button>
-            <span>nhịp</span>
+            <input type="range" id="countInRange" min="0" max="16" step="1" value="3" style="flex:1"/>
+            <output id="countInDisplay">3 nhịp</output>
           </div>
         </div>
       </div>
@@ -645,8 +695,12 @@
     /********************************************************************
      * 1. CÁC BIẾN TÙY CHỈNH & CẤU HÌNH MẶC ĐỊNH
      ********************************************************************/
-    let noteHeightScale = parseFloat(localStorage.getItem("piano_noteHeightScale") ?? "1.0");
-    if (isNaN(noteHeightScale)) noteHeightScale = 1.0;
+    // Giá trị pixel / phách. Chuyển đổi cài đặt % cũ một lần khi nâng cấp OTA.
+    let noteHeightPx = Number(localStorage.getItem("piano_noteHeightPx") ||
+      Math.round(46 * Number(localStorage.getItem("piano_noteHeightScale") || 1)));
+    noteHeightPx = Math.min(130, Math.max(12, noteHeightPx || 46));
+    let blackKeyLight = Number(localStorage.getItem('piano_blackKeyLight') || 60);
+    let toolbarHeightPx = Number(localStorage.getItem('piano_toolbarHeightPx') || 82);
     const LYRIC_FONT_SIZE = 14;
 
     let staffBannerHeight1 = parseInt(localStorage.getItem("piano_staffHeight1") ?? "55", 10);
@@ -724,6 +778,8 @@
 
     let audioCtx = null;
     let triggeredNotesSet = new Set();
+    const liveAudioNodes = new Set();
+    let lastAudioFrameClock = null;
     let lastFrameTime = 0;
 
     /********************************************************************
@@ -739,41 +795,70 @@
       }
     }
 
-    function playPianoNote(midi, durationSec, hand) {
+    // Đặt lịch Web Audio trước ~120 ms, thay vì phát lúc màn hình vẽ tới nốt.
+    // Không cần tải âm thanh mạng: âm thanh vẫn chạy offline.
+    function playPianoNote(midi, durationSec, hand, startAt = null) {
       if (!audioCtx) return;
       if (handMode === "rh" && hand === "lh") return;
       if (handMode === "lh" && hand === "rh") return;
-
-      const now = audioCtx.currentTime;
+      const at = Math.max(audioCtx.currentTime + 0.004, startAt ?? audioCtx.currentTime);
+      const duration = Math.max(0.035, durationSec);
+      const peak = hand === 'rh' ? 0.24 : 0.14;
       const freq = 440 * Math.pow(2, (midi - 69) / 12);
-
-      const masterGain = audioCtx.createGain();
-      const maxGain = hand === "rh" ? 0.28 : 0.16;
-      masterGain.gain.setValueAtTime(0.001, now);
-      masterGain.gain.linearRampToValueAtTime(maxGain, now + 0.015);
-      masterGain.gain.exponentialRampToValueAtTime(maxGain * 0.4, now + 0.25);
-      masterGain.gain.exponentialRampToValueAtTime(0.0008, now + Math.max(durationSec, 0.35) + 0.15);
-
-      const osc1 = audioCtx.createOscillator();
-      osc1.type = "triangle";
-      osc1.frequency.setValueAtTime(freq, now);
-
-      const osc2 = audioCtx.createOscillator();
-      osc2.type = "sine";
-      osc2.frequency.setValueAtTime(freq * 2, now);
-      const gain2 = audioCtx.createGain();
-      gain2.gain.setValueAtTime(0.18, now);
-
-      osc1.connect(masterGain);
-      osc2.connect(gain2);
-      gain2.connect(masterGain);
-      masterGain.connect(audioCtx.destination);
-
-      const stopTime = now + Math.max(durationSec, 0.35) + 0.2;
-      osc1.start(now);
-      osc2.start(now);
-      osc1.stop(stopTime);
-      osc2.stop(stopTime);
+      const gain = audioCtx.createGain();
+      const attackEnd = at + 0.006;
+      const decayEnd = at + Math.min(0.2, Math.max(0.025, duration * 0.45));
+      const noteEnd = at + duration;
+      const releaseEnd = noteEnd + Math.min(0.35, Math.max(0.14, duration * 0.4));
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(peak, attackEnd);
+      gain.gain.exponentialRampToValueAtTime(peak * 0.57, Math.max(decayEnd, attackEnd + 0.001));
+      gain.gain.setValueAtTime(peak * 0.57, Math.max(noteEnd, decayEnd + 0.001));
+      gain.gain.exponentialRampToValueAtTime(0.0001, Math.max(releaseEnd, decayEnd + 0.01));
+      const harmonics = [[1,'triangle',1],[2,'sine',0.16],[3,'sine',0.055]];
+      const oscs = [];
+      for (const [mult, type, volume] of harmonics) {
+        const oscillator = audioCtx.createOscillator();
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(freq * mult, at);
+        const mix = audioCtx.createGain();
+        mix.gain.value = volume;
+        oscillator.connect(mix);
+        mix.connect(gain);
+        oscillator.start(at);
+        oscillator.stop(Math.max(releaseEnd, decayEnd + 0.01) + 0.015);
+        oscs.push(oscillator);
+      }
+      gain.connect(audioCtx.destination);
+      const entry = {oscs};
+      liveAudioNodes.add(entry);
+      oscs[0].onended = () => {liveAudioNodes.delete(entry);try{gain.disconnect();}catch(_){}};
+    }
+    function stopLiveAudio() {
+      if (!audioCtx) return;
+      for (const entry of liveAudioNodes) for (const osc of entry.oscs) {
+        try {osc.stop();} catch (_) {}
+      }
+      liveAudioNodes.clear();
+    }
+    function scheduleUpcomingNotes(previousQuarter = currentBeat) {
+      if (!audioCtx || !songData || isCountingIn || pauseRemaining > 0) return;
+      const qps = currentBpm / 60;
+      const lookAheadQ = 0.13 * qps;
+      const selected = getOrderedSelectedPhrases();
+      const segment = selected.find(p => currentBeat >= p.startQuarter - 0.04 && currentBeat < p.endQuarter)
+        || (!selected.length ? {endQuarter:songData.totalQuarters} : null);
+      if (!segment) return;
+      const deadlineQ = Math.min(segment.endQuarter - 0.0001, currentBeat + lookAheadQ);
+      for (let i=0;i<activeNotes.length;i++) {
+        const n=activeNotes[i];
+        if (n.startQuarter > deadlineQ) break;
+        if (triggeredNotesSet.has(i) || n.startQuarter < previousQuarter - 0.015) continue;
+        triggeredNotesSet.add(i);
+        const lateQ = Math.max(0,currentBeat-n.startQuarter);
+        const when = audioCtx.currentTime + Math.max(0,(n.startQuarter-currentBeat)/qps);
+        playPianoNote(n.midi,Math.max(0.035,(n.durationQuarter-lateQ)/qps),n.hand,when);
+      }
     }
 
     function playMetronomeTick(isAccent = false) {
@@ -1041,6 +1126,7 @@
 
       let divisions = 1;
       let fifths = 0;
+      let keyMode = 'major';
       let beats = 4;
       let beatType = 4;
       let detectedTempo = 75;
@@ -1075,6 +1161,8 @@
             if (divEl) divisions = Math.max(1, parseInt(divEl.textContent.trim(), 10));
             const fifthsEl = child.querySelector("key > fifths");
             if (fifthsEl) fifths = parseInt(fifthsEl.textContent.trim(), 10);
+            const modeEl=child.querySelector('key > mode');
+            if(modeEl)keyMode=modeEl.textContent.trim().toLowerCase();
             const beatsEl = child.querySelector("time > beats");
             const beatTypeEl = child.querySelector("time > beat-type");
             if (beatsEl && beatTypeEl) {
@@ -1349,6 +1437,7 @@
         isTwoHandPianoSheet: isTwoHandPianoSheet && rawLeftNotes.length > 0,
         hasExplicitChords,
         fifths,
+        keyMode,
         beats,
         beatType,
         totalQuarters: globalQuarterCursor,
@@ -1672,6 +1761,7 @@
       }
 
       activeNotes = generatedNotes.sort((a, b) => a.startQuarter - b.startQuarter || a.midi - b.midi);
+      if(isPlaying){stopLiveAudio();triggeredNotesSet.clear();}
 
       // CỐ ĐỊNH Ô LYRIC LUÔN BÊN PHẢI (Trừ khi sát mép phải màn hình)
       const chordMap = new Map();
@@ -1719,6 +1809,7 @@
     }
 
     function resetCursorToFirstSelectedPhrase() {
+      stopLiveAudio();
       const selected = getOrderedSelectedPhrases();
       if (selected.length > 0) {
         currentBeat = selected[0].startQuarter;
@@ -1778,15 +1869,7 @@
       const prevBeat = currentBeat;
       currentBeat += deltaQuarters;
 
-      activeNotes.forEach((n, idx) => {
-        if (n.startQuarter >= prevBeat - 0.02 && n.startQuarter <= currentBeat) {
-          if (!triggeredNotesSet.has(idx)) {
-            triggeredNotesSet.add(idx);
-            const durSec = n.durationQuarter / quartersPerSecond;
-            playPianoNote(n.midi, durSec, n.hand);
-          }
-        }
-      });
+      scheduleUpcomingNotes(prevBeat);
 
       const selected = getOrderedSelectedPhrases();
       if (selected.length > 0) {
@@ -1828,12 +1911,18 @@
         btn.textContent = "⏸ Tạm dừng";
         btn.classList.add("playing");
       } else {
+        stopLiveAudio();
+        // Những nốt đã xếp lịch nhưng chưa vang phải được phát lại nếu tiếp tục.
+        activeNotes.forEach((n,i)=>{
+          if(n.startQuarter>=currentBeat-0.02)triggeredNotesSet.delete(i);
+        });
         btn.textContent = "▶ Tiếp tục";
         btn.classList.remove("playing");
       }
     }
 
     function stopPlayback() {
+      stopLiveAudio();
       isPlaying = false;
       hasStartedSinceSeek=false;
       isCountingIn = false;
@@ -1874,23 +1963,55 @@
     window.addEventListener("resize", resizeCanvas);
     resizeCanvas();
 
+    // Vòng quãng 5: đổi 12 bán âm không làm thay đổi hóa biểu.
+    const MAJOR_TONICS = [0,7,2,9,4,11,6,1,8,3,10,5];
+    const NATURAL_PC = [0,2,4,5,7,9,11];
+    const FIFTHS_SHARPS = [3,0,4,1,5,2,6]; // F C G D A E B
+    const FIFTHS_FLATS = [6,2,5,1,4,0,3];  // B E A D G C F
+    function tonicForFifths(fifths){return ((7*fifths)%12+12)%12;}
+    function displayFifths(){
+      if(!songData)return 0;
+      if(transposeSemitones%12===0)return songData.fifths;
+      const pc=(tonicForFifths(songData.fifths)+transposeSemitones+120)%12;
+      const choices=[];
+      for(let f=-7;f<=7;f++) if(tonicForFifths(f)===pc)choices.push(f);
+      choices.sort((a,b)=>{
+        const weight=f=>Math.abs(f-songData.fifths)*0.45+Math.abs(f)*0.65+
+          (transposeSemitones>0 && f<0 ? 0.3:0)+(transposeSemitones<0 && f>0 ? 0.3:0);
+        return weight(a)-weight(b);
+      });
+      return choices[0]??0;
+    }
+    function keyAlter(stepIdx,fifths){
+      if(fifths>0)return FIFTHS_SHARPS.slice(0,Math.min(7,fifths)).includes(stepIdx)?1:0;
+      if(fifths<0)return FIFTHS_FLATS.slice(0,Math.min(7,-fifths)).includes(stepIdx)?-1:0;
+      return 0;
+    }
+    function accGlyph(alter){return alter===0?'♮':alter===1?'♯':alter===-1?'♭':alter===2?'𝄪':'𝄫';}
+    function bestSpelling(midi,fifths){
+      const pc=(midi%12+12)%12;
+      const options=[];
+      for(let i=0;i<7;i++)for(let a=-2;a<=2;a++){
+        if(((NATURAL_PC[i]+a)%12+12)%12!==pc)continue;
+        const expected=keyAlter(i,fifths);
+        const score=(a===expected?0:1)+Math.abs(a-expected)*1.9+
+          (Math.abs(a)>1?4:0)+(fifths>=0&&a<0?.35:0)+(fifths<0&&a>0?.35:0);
+        options.push({stepIdx:i,alter:a,score});
+      }
+      options.sort((a,b)=>a.score-b.score);
+      const best=options[0];
+      const octave=Math.round((midi-12-NATURAL_PC[best.stepIdx]-best.alter)/12);
+      return {diatonicStep:octave*7+best.stepIdx,
+        acc:best.alter===keyAlter(best.stepIdx,fifths)?'':accGlyph(best.alter)};
+    }
     function getSheetDiatonicInfo(rawNote) {
       if (transposeSemitones === 0 && rawNote.step) {
-        const stepIdx = STEP_TO_DIATONIC_IDX[rawNote.step] ?? 0;
-        const acc = rawNote.alter === 1 ? "#" : (rawNote.alter === -1 ? "b" : "");
-        return {
-          diatonicStep: rawNote.octave * 7 + stepIdx,
-          acc
-        };
+        const idx=STEP_TO_DIATONIC_IDX[rawNote.step]??0;
+        const alter=rawNote.alter||0;
+        return {diatonicStep:rawNote.octave*7+idx,
+          acc:alter===keyAlter(idx,displayFifths())?'':accGlyph(alter)};
       }
-      const transMidi = rawNote.midi + transposeSemitones;
-      const octave = Math.floor(transMidi / 12) - 1;
-      const pc = ((transMidi % 12) + 12) % 12;
-      const mapped = PC_TO_DIATONIC[pc];
-      return {
-        diatonicStep: octave * 7 + mapped.stepIdx,
-        acc: mapped.acc
-      };
+      return bestSpelling(rawNote.midi+transposeSemitones,displayFifths());
     }
 
     // ----- BẢNG TRƯỜNG ĐỘ: dùng cho nốt tự sinh (không có thẻ <type> trong file) -----
@@ -1925,40 +2046,48 @@
     }
 
     // HÀM VẼ KHÓA SOL VÀ SỐ CHỈ NHỊP CỐ ĐỊNH Ở CẠNH TRÁI
-      function drawFixedClefBox(width, bannerHeight) {
-        ctx.save();
-        // Nền ô chứa khóa nhạc
-        ctx.fillStyle = "#F5E9D6";
-        ctx.fillRect(0, 0, 48, bannerHeight);
-        ctx.strokeStyle = "#C7B299";
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(48, 0);
-        ctx.lineTo(48, bannerHeight);
-        ctx.stroke();
-
-        const lineSpacing = 8;
-        const showLyricOnSheet = showLyricMode === "both" || showLyricMode === "sheet";
-        const topLineY = showLyricOnSheet ? 16 : 22;
-        const bottomLineY = topLineY + 4 * lineSpacing;
-
-        // Vẽ ký hiệu Khóa Sol (𝄞)
-        ctx.fillStyle = "#3E2723";
-        ctx.font = "32px serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("𝄞", 20, topLineY + 2 * lineSpacing + 2);
-
-        // Vẽ Số chỉ nhịp (VD: 4/4) ngay bên cạnh Khóa Sol
-        if (songData) {
-          ctx.font = "700 12px Lexend";
-          ctx.textAlign = "left";
-          ctx.textBaseline = "alphabetic";
-          ctx.fillText(String(songData.beats), 34, topLineY + 12);
-          ctx.fillText(String(songData.beatType), 34, bottomLineY - 2);
-        }
-        ctx.restore();
+    function drawFixedClefBox(width,bannerHeight){
+      ctx.save();
+      const isTwoStaff=sheetClefMode==='both'||(sheetClefMode==='auto'&&songData?.isTwoHandPianoSheet);
+      const spacing=isTwoStaff?6:8;
+      const trebleTop=(showLyricMode==='both'||showLyricMode==='sheet')?12:16;
+      const bassTop=trebleTop+4*spacing+16;
+      const wantsTreble=sheetClefMode!=='bass';
+      const wantsBass=sheetClefMode==='bass'||isTwoStaff;
+      const fifths=displayFifths();
+      const signNum=Math.min(7,Math.abs(fifths));
+      const boxWidth=72+signNum*10;
+      ctx.fillStyle='#F5E9D6';ctx.fillRect(0,0,boxWidth,bannerHeight);
+      ctx.strokeStyle='#C7B299';ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(boxWidth,0);ctx.lineTo(boxWidth,bannerHeight);ctx.stroke();
+      ctx.fillStyle='#3E2723';ctx.font='28px serif';ctx.textAlign='center';ctx.textBaseline='middle';
+      if(wantsTreble)ctx.fillText('𝄞',16,trebleTop+spacing*2+1);
+      if(wantsBass)ctx.fillText('𝄢',16,(wantsTreble?bassTop:trebleTop)+spacing*2+1);
+      // Số nhịp cố định; chữ và hóa biểu không trôi khi cuộn.
+      ctx.font='700 10px system-ui';ctx.textBaseline='alphabetic';
+      if(songData){
+        ctx.fillText(String(songData.beats),34,trebleTop+spacing*1.8);
+        ctx.fillText(String(songData.beatType),34,trebleTop+spacing*3.6);
       }
+      // Tông gốc màu nâu; khi chuyển tông dùng tím để phân biệt.
+      ctx.fillStyle=transposeSemitones===0?'#3E2723':'#a128a6';
+      ctx.font='bold 18px serif';
+      const steps=fifths>0?FIFTHS_SHARPS:FIFTHS_FLATS;
+      // vị trí hóa biểu chuẩn trên Sol: F5,C5,G5,D5,A4,E5,B4;
+      // trên Fa: F3,C3,G3,D3,A2,E3,B2.
+      const treblePositionsSharp=[4,1,5,2,-1,3,0];
+      const treblePositionsFlat=[0,3,-1,2,-2,1,-3];
+      const bassPositionsSharp=[2,-1,3,0,-3,1,-2];
+      const bassPositionsFlat=[-2,1,-3,0,-4,-1,-5];
+      for(let i=0;i<signNum;i++){
+        const x=48+i*10;
+        const posT=fifths>0?treblePositionsSharp[i]:treblePositionsFlat[i];
+        const posB=fifths>0?bassPositionsSharp[i]:bassPositionsFlat[i];
+        if(wantsTreble)ctx.fillText(fifths>0?'♯':'♭',x,trebleTop+(4-posT)*spacing/2+5);
+        if(wantsBass)ctx.fillText(fifths>0?'♯':'♭',x,(wantsTreble?bassTop:trebleTop)+(4-posB)*spacing/2+5);
+      }
+      ctx.restore();
+    }
 
     function drawScrollingSheetStaff(width, bannerHeight) {
       ctx.save();
@@ -2033,9 +2162,9 @@
       // Vẽ vạch nhịp
       songData.measuresInfo.forEach((m) => {
         const barX = playheadX + (m.startQuarter - currentBeat) * pxPerQuarter - 14;
-        if (barX >= 48 && barX <= width + 20) {
-          ctx.strokeStyle = "#4E342E";
-          ctx.lineWidth = 1.4;
+        if (barX >= 48 + Math.min(7,Math.abs(displayFifths()))*10 && barX <= width + 20) {
+          ctx.strokeStyle = "#6D4C41";
+          ctx.lineWidth = 2;
           ctx.beginPath();
           ctx.moveTo(barX, drawTreble ? trebleTopY : bassTopY);
           ctx.lineTo(barX, drawBass ? bassBottomY : trebleBottomY);
@@ -2043,8 +2172,8 @@
 
           const displayMeasureNum = hasPickup ? m.index : m.index + 1;
           if (displayMeasureNum > 0) {
-            ctx.fillStyle = "#8D6E63";
-            ctx.font = "600 10px Lexend";
+            ctx.fillStyle = "#5D4037";
+            ctx.font = "700 12px system-ui";
             ctx.textAlign = "left";
             ctx.fillText(`${displayMeasureNum}`, barX + 3, (drawTreble ? trebleTopY : bassTopY) - 4);
           }
@@ -2274,7 +2403,7 @@
 
       // 4. Vẽ Dấu lặng, Dòng kẻ phụ, Đầu nốt, Đuôi nốt lẻ và Móc đơn/Móc kép
       chordGroups.forEach((grp, gIdx) => {
-        if (grp.x < 42 || grp.x > width + 20) return;
+        if (grp.x < 72+Math.min(7,Math.abs(displayFifths()))*10 || grp.x > width + 20) return;
         const noteColor = grp.isActive ? "#C62828" : "#1E1410";
 
         if (grp.isRestOnly) {
@@ -2334,7 +2463,7 @@
           if (item.acc) {
             ctx.font = "700 11px Lexend";
             ctx.textAlign = "right";
-            ctx.fillText(item.acc === "#" ? "♯" : "♭", grp.x - rx - 2, item.y + 4);
+            ctx.fillText(item.acc, grp.x - rx - 2, item.y + 4);
           }
           if (item.raw.hasTieStart) {
             const nextGrp = chordGroups.slice(gIdx + 1).find((g) => g.staff === grp.staff && g.voice === grp.voice && !g.isRestOnly);
@@ -2493,13 +2622,6 @@
 
       drawFixedClefBox(width, bannerHeight);
 
-      if (drawBass) {
-        ctx.fillStyle = "#3E2723";
-        ctx.font = "26px serif";
-        ctx.textAlign = "center";
-        ctx.fillText("𝄢", 16, bassBottomY - 2);
-      }
-
       ctx.restore();
     }
 
@@ -2508,9 +2630,12 @@
      ********************************************************************/
     function drawSynthesiaStage(timestamp) {
       if (!lastFrameTime) lastFrameTime = timestamp;
-      const dt = Math.min((timestamp - lastFrameTime) / 1000, 0.1);
+      const visualDt = Math.min((timestamp - lastFrameTime) / 1000, 0.22);
       lastFrameTime = timestamp;
-
+      const audioClock = audioCtx?.state === 'running' ? audioCtx.currentTime : null;
+      const dt = audioClock !== null && lastAudioFrameClock !== null
+        ? Math.min(Math.max(0,audioClock-lastAudioFrameClock),0.22) : visualDt;
+      lastAudioFrameClock = audioClock;
       updatePlayback(dt);
       if(songData)updateCurrentPhraseLabel();
 
@@ -2519,6 +2644,9 @@
       const keyboardHeight=Number(localStorage.getItem('piano_v2_keyboard_h')||48);
       const isTwoStaff = sheetClefMode === "both" || (sheetClefMode === "auto" && songData && songData.isTwoHandPianoSheet);
       const activeBannerH = showSheetStaff ? (isTwoStaff ? staffBannerHeight2 : staffBannerHeight1) : 0;
+      const stageEl=document.getElementById('stageContainer');
+      if(stageEl.style.getPropertyValue('--sheet-banner-height')!==activeBannerH+'px')
+        stageEl.style.setProperty('--sheet-banner-height',activeBannerH+'px');
       const hitLineY = height - keyboardHeight;
       const fallingAreaHeight = Math.max(50, hitLineY - activeBannerH);
 
@@ -2604,12 +2732,11 @@
         }
       });
 
-      const visibleQuarters = 6;
-      const pixelsPerQuarter = (fallingAreaHeight / visibleQuarters) * noteHeightScale;
+      const pixelsPerQuarter = noteHeightPx; // px/phách, thời gian các ô và nốt luôn cùng một tỉ lệ.
 
       if (songData) {
-        ctx.strokeStyle = "rgba(109, 76, 65, 0.22)";
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = "rgba(91, 57, 38, 0.5)";
+        ctx.lineWidth = 2;
         songData.measuresInfo.forEach((m) => {
           const dy = hitLineY - (m.startQuarter - currentBeat) * pixelsPerQuarter;
           if (dy >= activeBannerH && dy <= hitLineY) {
@@ -2629,6 +2756,49 @@
         });
       }
 
+      // Vạch phách mờ bên trong mỗi ô, giúp đọc đúng thời điểm Si–Rê–Mi.
+      if(songData){
+        ctx.strokeStyle='rgba(109,76,65,0.12)';ctx.lineWidth=1;
+        for(const m of songData.measuresInfo){
+          const step=4/m.beatType;
+          for(let q=m.startQuarter+step;q<m.startQuarter+m.durationQuarter-0.001;q+=step){
+            const y=hitLineY-(q-currentBeat)*pixelsPerQuarter;
+            if(y>=activeBannerH&&y<=hitLineY){
+              ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(width,y);ctx.stroke();
+            }
+          }
+        }
+      }
+
+      // Dải dấu lặng riêng: trái = tay phải, phải = tay trái (nếu file có hai tay).
+      // Mốc Y lấy từ cùng timeline với nốt, không cho ký hiệu nghỉ đè lên các phím.
+      if (songData) {
+        for (const r of songData.rawSheetNotes) {
+          if (!r.isRest || r.durationQuarter <= 0) continue;
+          if (r.staff === 1 && handMode === 'lh') continue;
+          if (r.staff === 2 && (handMode === 'rh' || !songData.hasLhInSheet)) continue;
+          const peers = r.staff === 1 ? songData.rawRightNotes : songData.rawLeftNotes;
+          // Bỏ dấu lặng của bè phụ khi cùng lúc khuông còn nốt đang vang.
+          if (peers.some(n=>n.startQuarter < r.startQuarter+r.durationQuarter-0.01 &&
+              n.startQuarter+n.durationQuarter > r.startQuarter+0.01)) continue;
+          const yBottom = hitLineY - (r.startQuarter-currentBeat)*pixelsPerQuarter;
+          const yTop = yBottom-r.durationQuarter*pixelsPerQuarter;
+          const y0=Math.max(activeBannerH,yTop), y1=Math.min(hitLineY,yBottom);
+          if (y1-y0 < 4) continue;
+          const x = r.staff === 1 ? 5 : width-44;
+          ctx.fillStyle='rgba(115,93,75,0.17)';
+          ctx.strokeStyle='rgba(115,93,75,0.8)';
+          ctx.setLineDash([3,3]);
+          ctx.fillRect(x,y0,39,y1-y0);
+          ctx.strokeRect(x+.5,y0+.5,38,y1-y0-1);
+          ctx.setLineDash([]);
+          if (y1-y0 > 15) {
+            ctx.font='600 10px system-ui';ctx.textAlign='center';ctx.fillStyle='#6D4C41';
+            ctx.fillText('Lặng',x+19,Math.min(y1-4,y0+14));
+          }
+        }
+      }
+
       activeNotes.forEach((n) => {
         if (handMode === "rh" && n.hand === "lh") return;
         if (handMode === "lh" && n.hand === "rh") return;
@@ -2637,7 +2807,10 @@
         if (!geom) return;
 
         const noteBottomY = hitLineY - (n.startQuarter - currentBeat) * pixelsPerQuarter;
-        const noteHeight = Math.max(20, n.durationQuarter * pixelsPerQuarter - 3);
+        // Chỉ vẽ chiều dài thực, trừ khe 5 px ở cuối; không ép tối thiểu 20 px
+        // (nốt rất ngắn trước đây bị dài quá và đè sang nốt kế tiếp).
+        const durationPx = n.durationQuarter * pixelsPerQuarter;
+        const noteHeight = Math.max(2, durationPx - Math.min(5, durationPx * 0.25));
         const noteTopY = noteBottomY - noteHeight;
 
         if (!isCountingIn && currentBeat >= n.startQuarter && currentBeat <= n.startQuarter + n.durationQuarter) {
@@ -2766,12 +2939,14 @@
           } else if (activeHand === "lh") {
             ctx.fillStyle = "#F57C00";
           } else {
-            ctx.fillStyle = "#3E2723";
+            const light = Math.max(20,Math.min(90,blackKeyLight));
+            const gray = Math.round(45 + light * 1.8);
+            ctx.fillStyle = `rgb(${gray}, ${gray}, ${Math.min(244,gray+5)})`;
           }
 
           const bh = keyboardHeight * 0.6;
           ctx.fillRect(g.x, hitLineY, g.w, bh);
-          ctx.strokeStyle = "#271815";
+          ctx.strokeStyle = "#84766b";
           ctx.strokeRect(g.x, hitLineY, g.w, bh);
         }
       }
@@ -2783,6 +2958,8 @@
      * 11. SỰ KIỆN NÚT BẤM, FULLSCREEN & CÀI ĐẶT
      ********************************************************************/
     function updateTempoDisplay() {
+      const tempoRange=document.getElementById('tempoRange');
+      if (tempoRange) tempoRange.value=currentBpm;
       document.getElementById("tempoDisplay").textContent = `${currentBpm} BPM`;
       document.getElementById('tempoQuick').textContent=`${currentBpm} BPM`;
       if(songData)localStorage.setItem('piano_v2_bpm_'+songData.fileName,String(currentBpm));
@@ -2806,6 +2983,9 @@
       }
     }
 
+    document.getElementById('tempoRange').addEventListener('input',e=>{
+      currentBpm=Number(e.target.value); updateTempoDisplay();
+    });
     const changeTempo=delta=>{currentBpm=Math.max(30,Math.min(220,currentBpm+delta));updateTempoDisplay();};
     document.getElementById('btnTempoDownQuick').addEventListener('click',()=>changeTempo(-5));
     document.getElementById('btnTempoUpQuick').addEventListener('click',()=>changeTempo(5));
@@ -2858,9 +3038,14 @@
     const keyboardModeEl=document.getElementById('keyboardModeSelect');
     keyboardModeEl.value=localStorage.getItem('piano_v2_keyboard_mode')||'follow';
     keyboardModeEl.addEventListener('change',()=>localStorage.setItem('piano_v2_keyboard_mode',keyboardModeEl.value));
-    const keyboardHeightEl=document.getElementById('keyboardHeightSelect');
+    const keyboardHeightEl=document.getElementById('keyboardHeightRange');
+    const keyboardHeightOut=document.getElementById('keyboardHeightDisplay');
     keyboardHeightEl.value=localStorage.getItem('piano_v2_keyboard_h')||'48';
-    keyboardHeightEl.addEventListener('change',()=>localStorage.setItem('piano_v2_keyboard_h',keyboardHeightEl.value));
+    keyboardHeightOut.textContent=keyboardHeightEl.value+' px';
+    keyboardHeightEl.addEventListener('input',()=>{
+      keyboardHeightOut.textContent=keyboardHeightEl.value+' px';
+      localStorage.setItem('piano_v2_keyboard_h',keyboardHeightEl.value);
+    });
     const tempoStepEl=document.getElementById('tempoStepSelect');tempoStepEl.value=String(tempoStep);
     tempoStepEl.addEventListener('change',()=>{tempoStep=Number(tempoStepEl.value);localStorage.setItem('piano_v2_tempo_step',String(tempoStep));});
     const tempoMaxEl=document.getElementById('tempoMaxInput');tempoMaxEl.value=String(tempoMax);
@@ -3060,12 +3245,48 @@
 
     const noteHeightRange = document.getElementById("noteHeightRange");
     const noteHeightDisplay = document.getElementById("noteHeightDisplay");
-    noteHeightRange.value = noteHeightScale;
-    noteHeightDisplay.textContent = `${Math.round(noteHeightScale * 100)}%`;
-    noteHeightRange.addEventListener("input", (e) => {
-      noteHeightScale = parseFloat(e.target.value);
-      noteHeightDisplay.textContent = `${Math.round(noteHeightScale * 100)}%`;
-      localStorage.setItem("piano_noteHeightScale", String(noteHeightScale));
+    noteHeightRange.value = noteHeightPx;
+    noteHeightDisplay.textContent = `${noteHeightPx} px`;
+    noteHeightRange.addEventListener('input', e => {
+      noteHeightPx = Number(e.target.value);
+      noteHeightDisplay.textContent = `${noteHeightPx} px`;
+      localStorage.setItem('piano_noteHeightPx',String(noteHeightPx));
+    });
+    const toolbar = document.querySelector('.piano-toolbar');
+    const toolbarRange = document.getElementById('toolbarHeightRange');
+    const toolbarOutput = document.getElementById('toolbarHeightDisplay');
+    const floatBtn = document.getElementById('btnToggleToolbar');
+    function applyToolbarHeight(){
+      toolbar.style.setProperty('--toolbar-height',toolbarHeightPx+'px');
+      toolbarOutput.textContent=toolbarHeightPx+' px';
+      requestAnimationFrame(resizeCanvas);
+    }
+    toolbarRange.value=toolbarHeightPx;
+    applyToolbarHeight();
+    toolbarRange.addEventListener('input',e=>{
+      toolbarHeightPx=Number(e.target.value);
+      localStorage.setItem('piano_toolbarHeightPx',String(toolbarHeightPx));
+      applyToolbarHeight();
+    });
+    function setToolbarCollapsed(collapsed){
+      toolbar.classList.toggle('toolbar-collapsed',collapsed);
+      floatBtn.textContent=collapsed?'▾':'▴';
+      floatBtn.title=collapsed?'Hiện thanh điều khiển':'Ẩn thanh điều khiển';
+      floatBtn.setAttribute('aria-label',floatBtn.title);
+      floatBtn.setAttribute('aria-expanded',String(!collapsed));
+      localStorage.setItem('piano_toolbarCollapsed',String(collapsed));
+      requestAnimationFrame(resizeCanvas);
+    }
+    setToolbarCollapsed(localStorage.getItem('piano_toolbarCollapsed')==='true');
+    floatBtn.addEventListener('click',()=>setToolbarCollapsed(!toolbar.classList.contains('toolbar-collapsed')));
+    const blackRange=document.getElementById('blackKeyLightRange');
+    const blackOutput=document.getElementById('blackKeyLightDisplay');
+    blackRange.value=blackKeyLight;
+    blackOutput.textContent=blackKeyLight+'%';
+    blackRange.addEventListener('input',e=>{
+      blackKeyLight=Number(e.target.value);
+      blackOutput.textContent=blackKeyLight+'%';
+      localStorage.setItem('piano_blackKeyLight',String(blackKeyLight));
     });
 
     const lyricBgOpacityRange = document.getElementById("lyricBgOpacityRange");
@@ -3096,16 +3317,15 @@
       localStorage.setItem("piano_handMode",handMode);
     });
 
-    const countInInput = document.getElementById("countInInput");
-    countInInput.value = countInBeatsSetting;
-    function updateCountInSetting(val) {
-      countInBeatsSetting = Math.max(0, Math.min(16, parseInt(val || "0", 10)));
-      countInInput.value = countInBeatsSetting;
-      localStorage.setItem("piano_countIn", String(countInBeatsSetting));
-    }
-    countInInput.addEventListener("change", (e) => updateCountInSetting(e.target.value));
-    document.getElementById("btnCountInMinus").addEventListener("click", () => updateCountInSetting(countInBeatsSetting - 1));
-    document.getElementById("btnCountInPlus").addEventListener("click", () => updateCountInSetting(countInBeatsSetting + 1));
+    const countInRange=document.getElementById('countInRange');
+    const countInOutput=document.getElementById('countInDisplay');
+    countInRange.value=countInBeatsSetting;
+    countInOutput.textContent=countInBeatsSetting+' nhịp';
+    countInRange.addEventListener('input',e=>{
+      countInBeatsSetting=Number(e.target.value);
+      countInOutput.textContent=countInBeatsSetting+' nhịp';
+      localStorage.setItem('piano_countIn',String(countInBeatsSetting));
+    });
 
     const noteLabelSelect = document.getElementById("noteLabelSelect");
     noteLabelSelect.value = noteLabelMode;
