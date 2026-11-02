@@ -11,6 +11,7 @@
   <!-- Thư viện JSZip để đọc trực tiếp file .mxl nén của MuseScore -->
   <script src="vendor/jszip.min.js"></script>
   <script src="phrase-engine.js"></script>
+  <script src="falling-note-layout.js"></script>
   <script src="ota-config.js"></script>
   <script defer src="native-ota.bundle.js"></script>
 
@@ -564,6 +565,25 @@
         </div>
       </div>
 
+      <!-- Hiển thị ký hiệu ngay trên nốt rơi; có thể quan sát thay đổi ngay khi kéo. -->
+      <div class="setting-row">
+        <div class="setting-row-inline">
+          <label for="fallingNoteFontRange">🔤 Kích thước chữ trên nốt rơi:</label>
+          <div class="slider-line">
+            <input type="range" id="fallingNoteFontRange" min="1" max="28" step="1" value="12" />
+            <output id="fallingNoteFontDisplay">12 px</output>
+          </div>
+        </div>
+        <div class="setting-row-inline" style="margin-top:8px;">
+          <label for="fallingNoteRadiusRange">▢ Độ bo tròn góc nốt rơi:</label>
+          <div class="slider-line">
+            <input type="range" id="fallingNoteRadiusRange" min="0" max="20" step="1" value="5" />
+            <output id="fallingNoteRadiusDisplay">5 px</output>
+          </div>
+          <p class="settings-hint">0 px = góc vuông. Hai thanh trượt cập nhật trực tiếp trên khu vực nốt rơi.</p>
+        </div>
+      </div>
+
       <!-- Cài đặt: Tốc độ BPM -->
       <div class="setting-row">
         <div class="setting-row-inline">
@@ -700,6 +720,10 @@
       Math.round(46 * Number(localStorage.getItem("piano_noteHeightScale") || 1)));
     noteHeightPx = Math.min(130, Math.max(12, noteHeightPx || 46));
     let blackKeyLight = Number(localStorage.getItem('piano_blackKeyLight') || 60);
+    const savedFallingFontPx = Number(localStorage.getItem('piano_fallingNoteFontPx') ?? '12');
+    let fallingNoteFontPx = Math.min(28, Math.max(1, Number.isFinite(savedFallingFontPx) ? savedFallingFontPx : 12));
+    const savedFallingRadiusPx = Number(localStorage.getItem('piano_fallingNoteRadiusPx') ?? '5');
+    let fallingNoteRadiusPx = Math.min(20, Math.max(0, Number.isFinite(savedFallingRadiusPx) ? savedFallingRadiusPx : 5));
     let toolbarHeightPx = Number(localStorage.getItem('piano_toolbarHeightPx') || 82);
     const LYRIC_FONT_SIZE = 14;
 
@@ -1449,6 +1473,7 @@
       };
 
       songData.hasLhInSheet = rawSheetNotes.some((n) => n.staff === 2 && !n.isRest);
+      songData.fallingRestSegments = PianoFallingLayout.attachRestsToPreviousNotes(rawSheetNotes);
       currentBpm = detectedTempo;
       transposeSemitones = 0;
       updateTempoDisplay();
@@ -1951,16 +1976,26 @@
       return SEMITONE_TO_LETTER[pc];
     }
 
+    // Không ghim kích thước CSS canvas bằng px: khi toolbar ẩn, phần sân khấu
+    // tự giãn ra nhưng style.height px cũ làm đáy màn hình bị bỏ trống (Android).
     function resizeCanvas() {
       const stage = document.getElementById("stageContainer");
+      const cssWidth = Math.round(stage.clientWidth);
+      const cssHeight = Math.round(stage.clientHeight);
+      if (!cssWidth || !cssHeight) return;
       const dpr = window.devicePixelRatio || 1;
-      canvas.width = stage.clientWidth * dpr;
-      canvas.height = stage.clientHeight * dpr;
-      canvas.style.width = stage.clientWidth + "px";
-      canvas.style.height = stage.clientHeight + "px";
+      const backingWidth = Math.max(1, Math.round(cssWidth * dpr));
+      const backingHeight = Math.max(1, Math.round(cssHeight * dpr));
+      if (canvas.width !== backingWidth) canvas.width = backingWidth;
+      if (canvas.height !== backingHeight) canvas.height = backingHeight;
+      // CSS canvas giữ width/height:100%; thay đổi kích thước dựa vào vùng chứa.
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
     window.addEventListener("resize", resizeCanvas);
+    window.addEventListener("orientationchange", () => requestAnimationFrame(resizeCanvas));
+    if (typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(() => resizeCanvas()).observe(document.getElementById('stageContainer'));
+    }
     resizeCanvas();
 
     // Vòng quãng 5: đổi 12 bán âm không làm thay đổi hóa biểu.
@@ -2770,31 +2805,44 @@
         }
       }
 
-      // Dải dấu lặng riêng: trái = tay phải, phải = tay trái (nếu file có hai tay).
-      // Mốc Y lấy từ cùng timeline với nốt, không cho ký hiệu nghỉ đè lên các phím.
+      // Dấu lặng được đặt đúng trên CÙNG CỘT phím với nốt vừa kết thúc,
+      // tức nối tiếp theo timeline ở phía trên nốt trước đó (nhạc rơi từ trên xuống).
+      // Bỏ qua các dấu lặng trong ô nhịp đầu tiên để giao diện đầu bài gọn hơn.
       if (songData) {
-        for (const r of songData.rawSheetNotes) {
-          if (!r.isRest || r.durationQuarter <= 0) continue;
+        for (const r of songData.fallingRestSegments || []) {
           if (r.staff === 1 && handMode === 'lh') continue;
           if (r.staff === 2 && (handMode === 'rh' || !songData.hasLhInSheet)) continue;
-          const peers = r.staff === 1 ? songData.rawRightNotes : songData.rawLeftNotes;
-          // Bỏ dấu lặng của bè phụ khi cùng lúc khuông còn nốt đang vang.
-          if (peers.some(n=>n.startQuarter < r.startQuarter+r.durationQuarter-0.01 &&
-              n.startQuarter+n.durationQuarter > r.startQuarter+0.01)) continue;
-          const yBottom = hitLineY - (r.startQuarter-currentBeat)*pixelsPerQuarter;
-          const yTop = yBottom-r.durationQuarter*pixelsPerQuarter;
-          const y0=Math.max(activeBannerH,yTop), y1=Math.min(hitLineY,yBottom);
-          if (y1-y0 < 4) continue;
-          const x = r.staff === 1 ? 5 : width-44;
-          ctx.fillStyle='rgba(115,93,75,0.17)';
-          ctx.strokeStyle='rgba(115,93,75,0.8)';
-          ctx.setLineDash([3,3]);
-          ctx.fillRect(x,y0,39,y1-y0);
-          ctx.strokeRect(x+.5,y0+.5,38,y1-y0-1);
+          const geom = keyGeometry[r.midi + transposeSemitones];
+          if (!geom) continue;
+          const yBottom = hitLineY - (r.startQuarter - currentBeat) * pixelsPerQuarter;
+          const yTop = yBottom - r.durationQuarter * pixelsPerQuarter;
+          const clippedTop = Math.max(activeBannerH, yTop);
+          const clippedBottom = Math.min(hitLineY, yBottom);
+          const clippedHeight = clippedBottom - clippedTop;
+          if (clippedHeight < 2) continue;
+
+          const pad = geom.isBlack ? 1 : 2;
+          const bx = geom.x + pad, bw = Math.max(2, geom.w - pad * 2);
+          ctx.fillStyle = 'rgba(125, 105, 83, 0.36)';
+          ctx.strokeStyle = 'rgba(109, 76, 65, 0.93)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 2]);
+          ctx.beginPath();
+          ctx.roundRect(bx, clippedTop, bw, clippedHeight,
+            Math.min(3, bw / 2, clippedHeight / 2));
+          ctx.fill(); ctx.stroke();
           ctx.setLineDash([]);
-          if (y1-y0 > 15) {
-            ctx.font='600 10px system-ui';ctx.textAlign='center';ctx.fillStyle='#6D4C41';
-            ctx.fillText('Lặng',x+19,Math.min(y1-4,y0+14));
+          if (clippedHeight >= 12 && bw >= 12) {
+            ctx.fillStyle = '#4E342E';
+            ctx.textAlign = 'center';
+            let size = Math.min(10, clippedHeight - 3);
+            ctx.font = `700 ${size}px system-ui`;
+            while (size > 5 && ctx.measureText('Lặng').width > bw - 2) {
+              size -= 1;
+              ctx.font = `700 ${size}px system-ui`;
+            }
+            const label = ctx.measureText('Lặng').width <= bw - 2 ? 'Lặng' : '–';
+            ctx.fillText(label, bx + bw / 2, clippedTop + Math.min(clippedHeight - 3, size + 2));
           }
         }
       }
@@ -2807,10 +2855,10 @@
         if (!geom) return;
 
         const noteBottomY = hitLineY - (n.startQuarter - currentBeat) * pixelsPerQuarter;
-        // Chỉ vẽ chiều dài thực, trừ khe 5 px ở cuối; không ép tối thiểu 20 px
-        // (nốt rất ngắn trước đây bị dài quá và đè sang nốt kế tiếp).
+        // Chiều dài CHÍNH XÁC theo thời lượng, không bớt 5 px ở đầu nốt.
+        // Nốt kết thúc tại vạch ô nhịp phải chạm đúng vạch; viền giúp tách nốt kế tiếp.
         const durationPx = n.durationQuarter * pixelsPerQuarter;
-        const noteHeight = Math.max(2, durationPx - Math.min(5, durationPx * 0.25));
+        const noteHeight = Math.max(1, durationPx);
         const noteTopY = noteBottomY - noteHeight;
 
         if (!isCountingIn && currentBeat >= n.startQuarter && currentBeat <= n.startQuarter + n.durationQuarter) {
@@ -2835,16 +2883,24 @@
           ctx.lineWidth = 1.5;
 
           ctx.beginPath();
-          ctx.roundRect(bx, clampedTop, bw, clampedH, 5);
+          ctx.roundRect(bx, clampedTop, bw, clampedH,
+            Math.min(fallingNoteRadiusPx, bw / 2, clampedH / 2));
           ctx.fill();
           ctx.stroke();
 
-          if (clampedH >= 14) {
+          if (clampedH >= 4) {
             ctx.fillStyle = "#FFFDF9";
-            ctx.font = "700 12px Lexend";
             ctx.textAlign = "center";
             const label = getNoteLabel(n.midi);
-            ctx.fillText(label, bx + bw / 2, clampedBottom - 4);
+            // Nếu nốt ngắn hoặc phím hẹp, tự co kích thước thực tế vừa trong ô.
+            const heightFitSize = Math.max(1, Math.min(fallingNoteFontPx, clampedH - 3));
+            ctx.font = `700 ${heightFitSize}px Lexend`;
+            const textWidth = ctx.measureText(label).width;
+            const fittedSize = textWidth > bw - 3
+              ? Math.max(1, heightFitSize * (bw - 3) / textWidth)
+              : heightFitSize;
+            ctx.font = `700 ${fittedSize}px Lexend`;
+            ctx.fillText(label, bx + bw / 2, clampedBottom - Math.max(2, fittedSize * 0.25));
           }
 
           const showLyricOnFalling = showLyricMode === "both" || showLyricMode === "falling";
@@ -3251,6 +3307,25 @@
       noteHeightPx = Number(e.target.value);
       noteHeightDisplay.textContent = `${noteHeightPx} px`;
       localStorage.setItem('piano_noteHeightPx',String(noteHeightPx));
+    });
+    // Xem trực tiếp cỡ chữ và bo góc ngay trên canvas khi kéo slider.
+    const fallingFontRange = document.getElementById('fallingNoteFontRange');
+    const fallingFontDisplay = document.getElementById('fallingNoteFontDisplay');
+    fallingFontRange.value = String(fallingNoteFontPx);
+    fallingFontDisplay.textContent = fallingNoteFontPx + ' px';
+    fallingFontRange.addEventListener('input', e => {
+      fallingNoteFontPx = Number(e.target.value);
+      fallingFontDisplay.textContent = fallingNoteFontPx + ' px';
+      localStorage.setItem('piano_fallingNoteFontPx', String(fallingNoteFontPx));
+    });
+    const fallingRadiusRange = document.getElementById('fallingNoteRadiusRange');
+    const fallingRadiusDisplay = document.getElementById('fallingNoteRadiusDisplay');
+    fallingRadiusRange.value = String(fallingNoteRadiusPx);
+    fallingRadiusDisplay.textContent = fallingNoteRadiusPx + ' px';
+    fallingRadiusRange.addEventListener('input', e => {
+      fallingNoteRadiusPx = Number(e.target.value);
+      fallingRadiusDisplay.textContent = fallingNoteRadiusPx + ' px';
+      localStorage.setItem('piano_fallingNoteRadiusPx', String(fallingNoteRadiusPx));
     });
     const toolbar = document.querySelector('.piano-toolbar');
     const toolbarRange = document.getElementById('toolbarHeightRange');

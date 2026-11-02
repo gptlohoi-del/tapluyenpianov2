@@ -1,5 +1,5 @@
-const CACHE="piano-v2-c0e58db905c7be";
-const ASSETS=["./build-info.json","./icons/icon-192.png","./icons/icon-256-original.png","./icons/icon-512.png","./index.html","./manifest.json","./native-ota.bundle.js","./ota-config.js","./patterns.json","./phrase-engine.js","./songs/Mariage%20d'Amour%20easy.mxl","./songs/canon-in-d-johann-pachelbel.mxl","./songs/fur-elise-easy-ver.mxl","./songs/fur-elise-inter.mxl","./songs/fur-elise-inter2.mxl","./songs/index.json","./songs/piano-sonata-no-11-k-331-3rd-movement-rondo-alla-turca.mxl","./songs/tien-quan-ca-quoc-ca.mxl","./songs/turkish-march-easy.mxl","./songs/viet-tiep-cau-chuyen-hoa-binh.mxl","./vendor/JSZIP_LICENSE.md","./vendor/jszip.min.js"];
+const CACHE="piano-v2-3d50dfe10789fd";
+const ASSETS=["./build-info.json","./falling-note-layout.js","./icons/icon-192.png","./icons/icon-256-original.png","./icons/icon-512.png","./index.html","./manifest.json","./native-ota.bundle.js","./ota-config.js","./patterns.json","./phrase-engine.js","./songs/Mariage%20d'Amour%20easy.mxl","./songs/canon-in-d-johann-pachelbel.mxl","./songs/fur-elise-easy-ver.mxl","./songs/fur-elise-inter.mxl","./songs/fur-elise-inter2.mxl","./songs/index.json","./songs/piano-sonata-no-11-k-331-3rd-movement-rondo-alla-turca.mxl","./songs/tien-quan-ca-quoc-ca.mxl","./songs/turkish-march-easy.mxl","./songs/viet-tiep-cau-chuyen-hoa-binh.mxl","./vendor/JSZIP_LICENSE.md","./vendor/jszip.min.js"];
 
 self.addEventListener('install',event=>event.waitUntil(
   caches.open(CACHE).then(async cache=>{
