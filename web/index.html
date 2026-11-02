@@ -647,7 +647,7 @@
           <label for="fallingLyricRadiusRange">▢ Bo góc khung lời hát cạnh nốt rơi:</label>
           <div class="slider-line"><input type="range" id="fallingLyricRadiusRange" min="0" max="20" step="1" value="4" /><output id="fallingLyricRadiusDisplay">4 px</output></div>
         </div>
-        <p class="settings-hint">Khung lời hát có cùng kích thước với nốt; chữ dài được tự co hoặc xuống dòng cho vừa. Nốt hợp âm lấy nốt cao nhất làm mốc.</p>
+        <p class="settings-hint">Khung lời hát tự giãn chiều ngang vừa đủ chữ, chiều cao theo nốt rơi; khi thiếu chỗ sẽ tự giảm cỡ chữ hoặc ẩn để không che nốt khác. Với hợp âm, khung nằm bên phải nốt cao nhất.</p>
       </div>
       <!-- Cài đặt độ trong suốt của khung lời hát bên nốt rơi -->
       <div class="setting-row">
@@ -2691,48 +2691,14 @@
     }
 
     /********************************************************************
-     * Khung lời hát: cùng rộng/cao với nốt được gắn (nốt cao nhất của hợp âm),
-     * ở bên PHẢI nốt, tránh đè lên bất kỳ nốt nào khác.
-     * Với âm tiết dài, tự chia dòng/co font thay vì làm khung rộng tràn sân khấu.
+     * Khung lyric bên phải nốt rơi: chiều cao theo nốt, chiều rộng tự
+     * giãn vừa một dòng chữ. Luôn kiểm tra va chạm với các nốt rơi đang
+     * thấy và các khung lyric đã vẽ; không bao giờ che nốt khác.
      ********************************************************************/
-    function fitFallingLyricLines(text, width, height, preferredFontPx) {
-      const chars = Array.from(String(text || '').trim());
-      if (!chars.length || width < 5 || height < 5) return null;
-      const innerWidth = Math.max(1, width - 4);
-      const innerHeight = Math.max(1, height - 4);
-      const startSize = Math.min(28, Math.max(1, preferredFontPx), innerHeight);
-      for (let size = startSize; size >= 1; size -= 0.5) {
-        ctx.font = `700 ${size}px Lexend, sans-serif`;
-        const maxLines = Math.max(1, Math.floor(innerHeight / (size * 1.15)));
-        const lines = [];
-        let line = '';
-        let possible = true;
-        for (const char of chars) {
-          const candidate = line + char;
-          if (ctx.measureText(candidate).width <= innerWidth) {
-            line = candidate;
-          } else if (line) {
-            lines.push(line);
-            line = char;
-            if (ctx.measureText(line).width > innerWidth || lines.length >= maxLines) {
-              possible = false;
-              break;
-            }
-          } else {
-            possible = false;
-            break;
-          }
-        }
-        if (line && possible) lines.push(line);
-        if (possible && lines.length && lines.length <= maxLines) return {lines, fontPx: size, lineHeight: size * 1.15};
-      }
-      // Nốt rất ngắn/hẹp: không vẽ chữ tràn ra ngoài và che nốt khác.
-      return null;
-    }
-
     function rightSideLyricX(anchorRight, y, w, h, noteRects, placedLyricRects, viewportW) {
       let x = anchorRight + 3;
       const blocked = [...noteRects, ...placedLyricRects];
+      // Dịch ngang đến khe trống đầu tiên; không vượt mép phải canvas.
       for (let i = 0; i <= blocked.length; i++) {
         const obstacle = blocked.find(rect =>
           x < rect.x + rect.w + 2 && x + w > rect.x - 2 &&
@@ -2740,7 +2706,29 @@
         if (!obstacle) break;
         x = Math.max(x, obstacle.x + obstacle.w + 3);
       }
-      return x + w <= viewportW - 1 ? x : null;
+      return x + w <= viewportW - 2 ? x : null;
+    }
+
+    function layoutAutoWidthFallingLyric(item, noteRects, placedLyricRects, viewportW, preferredFontPx) {
+      const text = String(item.text || '').trim();
+      const boxHeight = item.h;
+      if (!text || boxHeight < 5 || item.anchorRight + 5 >= viewportW) return null;
+      const maxFont = Math.min(28, Math.max(1, preferredFontPx), boxHeight - 4);
+      const horizontalPadding = 5;
+      // Giữ một dòng chữ nếu có thể; font giảm dần chỉ khi thiếu khoảng trống.
+      for (let fontPx = maxFont; fontPx >= 1; fontPx -= 0.5) {
+        ctx.font = `700 ${fontPx}px Lexend, sans-serif`;
+        const textWidth = ctx.measureText(text).width;
+        const boxWidth = Math.max(item.w, Math.ceil(textWidth + horizontalPadding * 2));
+        if (boxWidth > viewportW - item.anchorRight - 5) continue;
+        const x = rightSideLyricX(item.anchorRight, item.y, boxWidth, boxHeight,
+          noteRects, placedLyricRects, viewportW);
+        if (x !== null) {
+          return {x, y: item.y, w: boxWidth, h: boxHeight, fontPx, text};
+        }
+      }
+      // Không còn chỗ: bỏ qua khung này, tuyệt đối không vẽ đè lên nốt khác.
+      return null;
     }
 
     /********************************************************************
@@ -3011,38 +2999,27 @@
 
       const placedLyricRects = [];
       lyricsToDraw.forEach((item) => {
-        const boxWidth = item.w;
-        const boxHeight = item.h;
-        if (boxWidth < 5 || boxHeight < 5) return;
-        const boxY = item.y;
-        // Không tự động chuyển sang trái vì sẽ che những nốt thấp hơn của hợp âm.
-        // Nếu ở mép phải hoặc bị chắn bởi nốt khác, bỏ qua khung trong khung hình này.
-        const boxX = rightSideLyricX(item.anchorRight, boxY, boxWidth, boxHeight,
-          visibleNoteRects, placedLyricRects, width);
-        if (boxX === null) return;
-        const fitted = fitFallingLyricLines(item.text, boxWidth, boxHeight, fallingLyricFontPx);
-        // Không làm nhãn rộng hơn nốt, kể cả khi chữ dài.
+        const box = layoutAutoWidthFallingLyric(item, visibleNoteRects,
+          placedLyricRects, width, fallingLyricFontPx);
+        if (!box) return;
+
         ctx.fillStyle = `rgba(253, 249, 241, ${lyricBgOpacity})`;
         ctx.strokeStyle = `rgba(141, 78, 42, ${Math.min(1, lyricBgOpacity + 0.2)})`;
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.roundRect(boxX, boxY, boxWidth, boxHeight,
-          Math.min(fallingLyricRadiusPx, boxWidth / 2, boxHeight / 2));
+        ctx.roundRect(box.x, box.y, box.w, box.h,
+          Math.min(fallingLyricRadiusPx, box.w / 2, box.h / 2));
         ctx.fill();
         ctx.stroke();
-        placedLyricRects.push({x: boxX, y: boxY, w: boxWidth, h: boxHeight});
-        if (fitted) {
-          ctx.fillStyle = `rgba(62, 39, 35, ${lyricTextOpacity})`;
-          ctx.font = `700 ${fitted.fontPx}px Lexend, sans-serif`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          const lineTop = boxY + (boxHeight - fitted.lines.length * fitted.lineHeight) / 2;
-          fitted.lines.forEach((line, index) => {
-            ctx.fillText(line, boxX + boxWidth / 2,
-              lineTop + fitted.lineHeight * (index + 0.5), Math.max(1, boxWidth - 4));
-          });
-          ctx.textBaseline = 'alphabetic';
-        }
+        placedLyricRects.push({x: box.x, y: box.y, w: box.w, h: box.h});
+
+        ctx.fillStyle = `rgba(62, 39, 35, ${lyricTextOpacity})`;
+        ctx.font = `700 ${box.fontPx}px Lexend, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(box.text, box.x + box.w / 2, box.y + box.h / 2,
+          Math.max(1, box.w - 10));
+        ctx.textBaseline = 'alphabetic';
       });
 
       ctx.restore();
