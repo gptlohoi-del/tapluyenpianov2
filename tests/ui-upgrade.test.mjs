@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const html=fs.readFileSync(new URL('../web/index.html',import.meta.url),'utf8');
 test('all visual size changes use live pixel sliders',()=>{
-  for(const id of ['toolbarHeightRange','keyboardHeightRange','noteHeightRange','tempoRange','countInRange','blackKeyLightRange','fallingNoteFontRange','fallingNoteRadiusRange']){
+  for(const id of ['toolbarHeightRange','keyboardHeightRange','noteHeightRange','tempoRange','countInRange','fallingAccidentalIntensityRange','fallingNoteFontRange','fallingNoteRadiusRange']){
     assert.match(html,new RegExp(`<input[^>]*id="${id}"[^>]*type="range"|<input[^>]*type="range"[^>]*id="${id}"`));
   }
   assert.match(html,/toolbar-collapsed/);
@@ -31,4 +31,14 @@ test('audio has lookahead and live voice cleanup',()=>{
 test('canvas follows expanded stage after hiding toolbar',()=>{
   assert.match(html,/ResizeObserver/);
   assert.doesNotMatch(html,/canvas\.style\.height = stage\.clientHeight/);
+});
+
+test('accidental intensity affects only falling sharp/flat notes',()=>{
+  assert.match(html,/id="fallingAccidentalIntensityRange"[^>]+min="10"[^>]+max="100"/);
+  assert.match(html,/piano_fallingAccidentalIntensity/);
+  assert.match(html,/isAccidentalFallingNote = isBlackKey\(n\.midi\)/);
+  assert.match(html,/const fallingFill = isAccidentalFallingNote/);
+  assert.match(html,/const fallingBorder = isAccidentalFallingNote/);
+  assert.match(html,/ctx\.fillStyle = "#3E2723"; \/\/ Trả phím đen về màu gốc/);
+  assert.doesNotMatch(html,/blackKeyLightRange|piano_blackKeyLight',String/);
 });

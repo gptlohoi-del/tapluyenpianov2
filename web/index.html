@@ -503,8 +503,8 @@
       <div class="setting-row">
         <label for="toolbarHeightRange">↕ Chiều cao thanh điều khiển</label>
         <div class="slider-line"><input id="toolbarHeightRange" type="range" min="68" max="150" step="2"/><output id="toolbarHeightDisplay">82 px</output></div>
-        <label for="blackKeyLightRange">🎹 Độ nhạt phím thăng / giáng</label>
-        <div class="slider-line"><input id="blackKeyLightRange" type="range" min="20" max="90" step="5"/><output id="blackKeyLightDisplay">60%</output></div>
+        <label for="fallingAccidentalIntensityRange">🎼 Độ đậm nốt thăng / giáng đang rơi</label>
+        <div class="slider-line"><input id="fallingAccidentalIntensityRange" type="range" min="10" max="100" step="5" value="60"/><output id="fallingAccidentalIntensityDisplay">60%</output></div>
         <div class="settings-hint">Kéo thanh trượt và quan sát trực tiếp phần bản nhạc không bị bảng cài đặt che.</div>
       </div>
       <!-- Cài đặt: Hiển thị dòng Sheet nhạc & Khóa nhạc -->
@@ -719,7 +719,11 @@
     let noteHeightPx = Number(localStorage.getItem("piano_noteHeightPx") ||
       Math.round(46 * Number(localStorage.getItem("piano_noteHeightScale") || 1)));
     noteHeightPx = Math.min(130, Math.max(12, noteHeightPx || 46));
-    let blackKeyLight = Number(localStorage.getItem('piano_blackKeyLight') || 60);
+    // Riêng các nốt rơi ứng với phím đen (C#, D#, F#, G#, A#).
+    // Không sử dụng giá trị cũ piano_blackKeyLight vì thuộc cài đặt phím đàn bị hiểu nhầm.
+    const savedAccidentalIntensity = Number(localStorage.getItem('piano_fallingAccidentalIntensity') ?? '60');
+    let fallingAccidentalIntensity = Number.isFinite(savedAccidentalIntensity)
+      ? Math.max(10, Math.min(100, savedAccidentalIntensity)) : 60;
     const savedFallingFontPx = Number(localStorage.getItem('piano_fallingNoteFontPx') ?? '12');
     let fallingNoteFontPx = Math.min(28, Math.max(1, Number.isFinite(savedFallingFontPx) ? savedFallingFontPx : 12));
     const savedFallingRadiusPx = Number(localStorage.getItem('piano_fallingNoteRadiusPx') ?? '5');
@@ -1968,6 +1972,16 @@
       return [1, 3, 6, 8, 10].includes(pc);
     }
 
+    // Pha màu nốt rơi với nền sân khấu để làm nhạt nốt thăng/giáng,
+    // không giảm opacity của chữ, không đổi màu của phím đàn hay nốt thường.
+    function softenFallingNoteColor(hex, percent) {
+      const factor = Math.max(0, Math.min(1, percent / 100));
+      const background = [239, 228, 210]; // cùng màu #EFE4D2 của canvas
+      const rgb = [1, 3, 5].map((i, j) =>
+        Math.round(background[j] * (1 - factor) + parseInt(hex.slice(i, i + 2), 16) * factor));
+      return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+    }
+
     function getNoteLabel(midi) {
       const pc = ((midi % 12) + 12) % 12;
       if (noteLabelMode === "solfege") {
@@ -2869,6 +2883,12 @@
 
         const barColor = n.hand === "rh" ? "#1F7A68" : "#D97724";
         const borderColor = n.hand === "rh" ? "#114B3E" : "#9E500F";
+        const isAccidentalFallingNote = isBlackKey(n.midi);
+        const fallingFill = isAccidentalFallingNote
+          ? softenFallingNoteColor(barColor, fallingAccidentalIntensity) : barColor;
+        // Giữ viền đủ rõ ở mức rất nhạt, không làm mờ ký hiệu chữ.
+        const fallingBorder = isAccidentalFallingNote
+          ? softenFallingNoteColor(borderColor, Math.max(30, fallingAccidentalIntensity)) : borderColor;
 
         const pad = geom.isBlack ? 1 : 2;
         const bx = geom.x + pad;
@@ -2878,8 +2898,8 @@
         const clampedH = Math.max(0, clampedBottom - clampedTop);
 
         if (clampedH > 2) {
-          ctx.fillStyle = barColor;
-          ctx.strokeStyle = borderColor;
+          ctx.fillStyle = fallingFill;
+          ctx.strokeStyle = fallingBorder;
           ctx.lineWidth = 1.5;
 
           ctx.beginPath();
@@ -2889,7 +2909,8 @@
           ctx.stroke();
 
           if (clampedH >= 4) {
-            ctx.fillStyle = "#FFFDF9";
+            ctx.fillStyle = isAccidentalFallingNote && fallingAccidentalIntensity < 85
+              ? "#3E2723" : "#FFFDF9";
             ctx.textAlign = "center";
             const label = getNoteLabel(n.midi);
             // Nếu nốt ngắn hoặc phím hẹp, tự co kích thước thực tế vừa trong ô.
@@ -2995,14 +3016,12 @@
           } else if (activeHand === "lh") {
             ctx.fillStyle = "#F57C00";
           } else {
-            const light = Math.max(20,Math.min(90,blackKeyLight));
-            const gray = Math.round(45 + light * 1.8);
-            ctx.fillStyle = `rgb(${gray}, ${gray}, ${Math.min(244,gray+5)})`;
+            ctx.fillStyle = "#3E2723"; // Trả phím đen về màu gốc, không còn slider màu phím.
           }
 
           const bh = keyboardHeight * 0.6;
           ctx.fillRect(g.x, hitLineY, g.w, bh);
-          ctx.strokeStyle = "#84766b";
+          ctx.strokeStyle = "#271815";
           ctx.strokeRect(g.x, hitLineY, g.w, bh);
         }
       }
@@ -3354,14 +3373,15 @@
     }
     setToolbarCollapsed(localStorage.getItem('piano_toolbarCollapsed')==='true');
     floatBtn.addEventListener('click',()=>setToolbarCollapsed(!toolbar.classList.contains('toolbar-collapsed')));
-    const blackRange=document.getElementById('blackKeyLightRange');
-    const blackOutput=document.getElementById('blackKeyLightDisplay');
-    blackRange.value=blackKeyLight;
-    blackOutput.textContent=blackKeyLight+'%';
-    blackRange.addEventListener('input',e=>{
-      blackKeyLight=Number(e.target.value);
-      blackOutput.textContent=blackKeyLight+'%';
-      localStorage.setItem('piano_blackKeyLight',String(blackKeyLight));
+    const accidentalRange = document.getElementById('fallingAccidentalIntensityRange');
+    const accidentalOutput = document.getElementById('fallingAccidentalIntensityDisplay');
+    accidentalRange.value = String(fallingAccidentalIntensity);
+    accidentalOutput.textContent = fallingAccidentalIntensity + '%';
+    accidentalRange.addEventListener('input', e => {
+      fallingAccidentalIntensity = Math.max(10, Math.min(100, Number(e.target.value)));
+      accidentalOutput.textContent = fallingAccidentalIntensity + '%';
+      localStorage.setItem('piano_fallingAccidentalIntensity', String(fallingAccidentalIntensity));
+      // drawSynthesiaStage đang chạy mỗi frame nên xem màu mới ngay, không cần đóng Setting.
     });
 
     const lyricBgOpacityRange = document.getElementById("lyricBgOpacityRange");
